@@ -7,12 +7,12 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/SupreetTadeparti/tollgate"
+repository = "https://github.com/SupreetTadeparti/ironwrit"
 
 [workspace.dependencies]
-tollgate-token = { path = "crates/tollgate-token" }
-tollgate-ledger = { path = "crates/tollgate-ledger" }
-tollgate-gateway = { path = "crates/tollgate-gateway" }
+ironwrit-token = { path = "crates/ironwrit-token" }
+ironwrit-ledger = { path = "crates/ironwrit-ledger" }
+ironwrit-gateway = { path = "crates/ironwrit-gateway" }
 
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }

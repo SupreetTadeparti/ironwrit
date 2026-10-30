@@ -4,10 +4,10 @@ use clap::{Parser, Subcommand};
 
 /// A cryptographic seatbelt for AI agents.
 ///
-/// Tollgate proxies MCP tool calls, allows only what a capability token
+/// Ironwrit proxies MCP tool calls, allows only what a capability token
 /// permits, and records every decision in a tamper-evident log.
 #[derive(Debug, Parser)]
-#[command(name = "tollgate", version, about, long_about)]
+#[command(name = "ironwrit", version, about, long_about)]
 pub struct Cli {
     /// Increase log verbosity (-v info, -vv debug, -vvv trace). RUST_LOG overrides this.
     #[arg(short, long, action = clap::ArgAction::Count, global = true)]
@@ -28,7 +28,7 @@ pub enum Command {
 
     /// Mint a new capability token from a Datalog policy.
     Mint {
-        /// Root private key created by `tollgate keygen`.
+        /// Root private key created by `ironwrit keygen`.
         #[arg(long)]
         key: PathBuf,
 
@@ -63,14 +63,14 @@ pub enum Command {
 
     /// Run an upstream MCP server behind the gateway.
     ///
-    /// Example: tollgate run --token <TOKEN> -- npx @modelcontextprotocol/server-filesystem ./docs
+    /// Example: ironwrit run --token <TOKEN> -- npx @modelcontextprotocol/server-filesystem ./docs
     Run {
         /// Capability token (base64) for this session.
-        #[arg(long, env = "TOLLGATE_TOKEN", hide_env_values = true)]
+        #[arg(long, env = "IRONWRIT_TOKEN", hide_env_values = true)]
         token: Option<String>,
 
         /// Ledger database to append decisions to.
-        #[arg(long, default_value = "tollgate.db")]
+        #[arg(long, default_value = "ironwrit.db")]
         ledger: PathBuf,
 
         /// Upstream MCP server command and its arguments.
@@ -81,7 +81,7 @@ pub enum Command {
     /// Inspect and verify the action log.
     Log {
         /// Ledger database.
-        #[arg(long, default_value = "tollgate.db", global = true)]
+        #[arg(long, default_value = "ironwrit.db", global = true)]
         db: PathBuf,
 
         #[command(subcommand)]
@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     fn run_collects_upstream_after_double_dash() {
-        let cli = Cli::parse_from(["tollgate", "run", "--", "npx", "server", "./docs"]);
+        let cli = Cli::parse_from(["ironwrit", "run", "--", "npx", "server", "./docs"]);
         let Command::Run { upstream, .. } = cli.command else {
             panic!("expected run command");
         };

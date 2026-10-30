@@ -1,6 +1,6 @@
 [package]
-name = "tollgate-cli"
-description = "Command-line interface for the Tollgate agent gateway"
+name = "ironwrit-cli"
+description = "Command-line interface for the Ironwrit agent gateway"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,13 +8,13 @@ license.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "tollgate"
+name = "ironwrit"
 path = "src/main.rs"
 
 [dependencies]
-tollgate-token.workspace = true
-tollgate-ledger.workspace = true
-tollgate-gateway.workspace = true
+ironwrit-token.workspace = true
+ironwrit-ledger.workspace = true
+ironwrit-gateway.workspace = true
 
 anyhow.workspace = true
 clap.workspace = true

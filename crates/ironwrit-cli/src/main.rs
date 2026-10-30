@@ -43,5 +43,5 @@ fn init_tracing(verbose: u8) {
 }
 
 fn not_yet(command: &str, phase: u8) -> anyhow::Result<()> {
-    bail!("`tollgate {command}` is not implemented yet (see docs/ROADMAP.md, phase {phase})")
+    bail!("`ironwrit {command}` is not implemented yet (see docs/ROADMAP.md, phase {phase})")
 }

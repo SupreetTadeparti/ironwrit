@@ -1,5 +1,5 @@
 [package]
-name = "tollgate-ledger"
+name = "ironwrit-gateway"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

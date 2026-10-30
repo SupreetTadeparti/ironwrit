@@ -1,4 +1,4 @@
-//! Tamper-evident action log for Tollgate.
+//! Tamper-evident action log for Ironwrit.
 //!
 //! Stores signed entries in an RFC 6962 Merkle tree and produces inclusion and
 //! consistency proofs. Implemented in Phase 4.

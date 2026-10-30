@@ -1,5 +1,5 @@
 [package]
-name = "tollgate-token"
+name = "ironwrit-token"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

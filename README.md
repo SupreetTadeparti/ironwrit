@@ -1,8 +1,8 @@
-# Tollgate
+# Ironwrit
 
 **A cryptographic seatbelt for AI agents.**
 
-Tollgate is an MCP proxy that sits between an AI agent and its tool servers.
+Ironwrit is an MCP proxy that sits between an AI agent and its tool servers.
 Every tool call must be permitted by a signed, attenuable capability token, and
 every decision is recorded in a tamper-evident Merkle log.
 
@@ -21,7 +21,7 @@ every decision is recorded in a tamper-evident Merkle log.
 
 ```sh
 cargo build
-cargo run -p tollgate-cli -- --help
+cargo run -p ironwrit-cli -- --help
 ```
 
 ## License

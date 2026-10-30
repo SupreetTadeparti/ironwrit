@@ -126,6 +126,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
+name = "ironwrit-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ironwrit-gateway",
+ "ironwrit-ledger",
+ "ironwrit-token",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "ironwrit-gateway"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
+name = "ironwrit-ledger"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
+name = "ironwrit-token"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -290,40 +324,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ad99c4c6d32803332c548b1af0540b357b3f5fc0be8f6c6bfe8b2e6ae784070"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "tollgate-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "tollgate-gateway",
- "tollgate-ledger",
- "tollgate-token",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "tollgate-gateway"
-version = "0.1.0"
-dependencies = [
- "thiserror",
-]
-
-[[package]]
-name = "tollgate-ledger"
-version = "0.1.0"
-dependencies = [
- "thiserror",
-]
-
-[[package]]
-name = "tollgate-token"
-version = "0.1.0"
-dependencies = [
- "thiserror",
 ]
 
 [[package]]
