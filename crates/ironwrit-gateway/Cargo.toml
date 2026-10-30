@@ -7,7 +7,15 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+ironwrit-token.workspace = true
+
+rmcp.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+which.workspace = true
 
 [lints]
 workspace = true

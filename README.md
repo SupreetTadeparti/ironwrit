@@ -24,6 +24,19 @@ cargo build
 cargo run -p ironwrit-cli -- --help
 ```
 
+## Running
+
+Put `ironwrit run --` in front of any stdio MCP server command. For example,
+with Claude Code:
+
+```sh
+claude mcp add fs -- ironwrit run -- npx -y @modelcontextprotocol/server-filesystem ./docs
+```
+
+Until capability tokens land (Phase 3), the gateway runs in pass-through mode:
+every call is allowed and logged. Use `-v` (or `RUST_LOG=info`) to see one log
+line per tool call on stderr.
+
 ## License
 
 Licensed under either of [Apache License 2.0](LICENSE-APACHE) or

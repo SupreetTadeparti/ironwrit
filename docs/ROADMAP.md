@@ -38,12 +38,12 @@ ironwrit/
 - **Done when:** CI is green and `ironwrit --help` lists all subcommands
 
 ## Phase 2: Pass-through MCP proxy (Weeks 2–3)
-- [ ] 2.1 `ironwrit run -- <cmd> [args]` spawns the upstream MCP server as a child process over stdio
-- [ ] 2.2 Gateway acts as an MCP server to the agent (rmcp stdio) and as an MCP client to the upstream
-- [ ] 2.3 Relay `initialize` (merge capabilities), `tools/list`, `tools/call`
-- [ ] 2.4 Interception hook: `trait CallPolicy { fn check(&self, call: &ToolCall) -> Decision }`, starting with `AllowAll`
-- [ ] 2.5 Structured `tracing` log per call (tool, args, latency, decision)
-- [ ] 2.6 Integration test: a mock upstream server in `tests/`, asserting round-trips
+- [x] 2.1 `ironwrit run -- <cmd> [args]` spawns the upstream MCP server as a child process over stdio
+- [x] 2.2 Gateway acts as an MCP server to the agent (rmcp stdio) and as an MCP client to the upstream
+- [x] 2.3 Relay `initialize` (merge capabilities), `tools/list`, `tools/call`
+- [x] 2.4 Interception hook: `trait CallPolicy { fn check(&self, call: &ToolCall) -> Decision }`, starting with `AllowAll`
+- [x] 2.5 Structured `tracing` log per call (tool, args, latency, decision)
+- [x] 2.6 Integration test: a mock upstream server in `tests/`, asserting round-trips
 - [ ] 2.7 Manual test: Claude Code → ironwrit → `@modelcontextprotocol/server-filesystem`
 - **Done when:** Claude Code behaves the same with or without ironwrit in the path
 

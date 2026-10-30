@@ -38,3 +38,29 @@ fn unimplemented_commands_fail_with_roadmap_hint() {
         "stderr was:\n{stderr}"
     );
 }
+
+#[test]
+fn run_refuses_tokens_until_they_are_enforced() {
+    let out = Command::new(env!("CARGO_BIN_EXE_ironwrit"))
+        .args(["run", "--token", "abc", "--", "anything"])
+        .env_remove("IRONWRIT_TOKEN")
+        .output()
+        .expect("failed to run ironwrit binary");
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("token enforcement is not implemented yet"),
+        "stderr was:\n{stderr}"
+    );
+}
+
+#[test]
+fn run_reports_missing_upstream_command() {
+    let out = ironwrit(&["run", "--", "ironwrit-no-such-command-12345"]);
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("failed to start upstream"),
+        "stderr was:\n{stderr}"
+    );
+}
