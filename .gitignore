@@ -1,0 +1,12 @@
+/target
+
+# Key material and local ledgers must never be committed.
+*.key
+*.biscuit
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+.vscode/
+.idea/

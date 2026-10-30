@@ -1,0 +1,25 @@
+[package]
+name = "tollgate-cli"
+description = "Command-line interface for the Tollgate agent gateway"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "tollgate"
+path = "src/main.rs"
+
+[dependencies]
+tollgate-token.workspace = true
+tollgate-ledger.workspace = true
+tollgate-gateway.workspace = true
+
+anyhow.workspace = true
+clap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true
