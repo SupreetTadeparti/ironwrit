@@ -1,9 +1,10 @@
 //! Key management and the token lifecycle: mint, attenuate, inspect.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
-use biscuit_auth::builder::Check;
+use biscuit_auth::builder::{Check, Term};
 use biscuit_auth::{Biscuit, BlockBuilder, KeyPair, PublicKey, UnverifiedBiscuit};
 
 use crate::{Error, Result};
@@ -74,8 +75,23 @@ pub fn read_public_key(path: &Path) -> Result<PublicKey> {
 /// Mint a token whose authority block is the Datalog `policy`, optionally
 /// expiring after `ttl`. Returns the token as base64.
 pub fn mint(policy: &str, root: &KeyPair, ttl: Option<Duration>) -> Result<String> {
+    mint_with_params(policy, &[], root, ttl)
+}
+
+/// Like [`mint`], with `{name}` placeholders in the policy bound to strings.
+/// Values are inserted as typed terms, never spliced into the source.
+pub fn mint_with_params(
+    policy: &str,
+    params: &[(String, String)],
+    root: &KeyPair,
+    ttl: Option<Duration>,
+) -> Result<String> {
+    let params: HashMap<String, Term> = params
+        .iter()
+        .map(|(name, value)| (name.clone(), Term::Str(value.clone())))
+        .collect();
     let mut builder = Biscuit::builder()
-        .code(policy)
+        .code_with_params(policy, params, HashMap::new())
         .map_err(|e| Error::Datalog(e.to_string()))?;
     if let Some(ttl) = ttl {
         builder = builder
@@ -221,6 +237,23 @@ mod tests {
     fn tokens_from_another_root_are_rejected() {
         let token = mint(POLICY, &generate_keypair(), None).unwrap();
         assert!(parse_token(&token, &generate_keypair().public()).is_err());
+    }
+
+    #[test]
+    fn params_are_bound_as_strings() {
+        let policy = r#"right("read_file"); reject if path($p), !$p.starts_with({docs} + "/");"#;
+        let params = [("docs".to_owned(), r#"/srv/"docs"#.to_owned())];
+        let token = mint_with_params(policy, &params, &generate_keypair(), None).unwrap();
+        let block = &inspect(&token, None).unwrap().blocks[0];
+        // Biscuit's printer doesn't escape quotes; what matters is the substitution.
+        assert!(
+            block.contains("/srv/") && !block.contains("{docs}"),
+            "{block}"
+        );
+        assert!(
+            mint(policy, &generate_keypair(), None).is_err(),
+            "unbound parameter"
+        );
     }
 
     #[test]

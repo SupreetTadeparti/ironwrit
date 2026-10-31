@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 ironwrit-token.workspace = true
+ironwrit-ledger.workspace = true
 
 rmcp.workspace = true
 serde_json.workspace = true
@@ -16,6 +17,10 @@ tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 which.workspace = true
+
+[dev-dependencies]
+rusqlite.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true

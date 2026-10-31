@@ -1,0 +1,7 @@
+// Send email, but only to the team's own domain. Every recipient is checked:
+// to, cc and bcc all become recipient facts.
+//
+//   ironwrit mint --policy email-team-only.dl --param domain=example.com --ttl 30m
+right("send_email");
+
+reject if recipient_domain($d), $d != {domain};

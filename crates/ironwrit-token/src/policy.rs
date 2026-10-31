@@ -46,6 +46,11 @@ pub trait CallPolicy: Send + Sync + 'static {
     fn could_permit(&self, _tool: &str) -> bool {
         true
     }
+
+    /// Identifies the token behind this policy in the ledger.
+    fn token_id(&self) -> &str {
+        "none"
+    }
 }
 
 /// Allows every call. Used for pass-through mode until tokens are enforced.

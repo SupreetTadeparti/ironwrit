@@ -64,40 +64,44 @@ ironwrit/
 - **Done when:** a token scoped to `read_file` + `/docs/**` can't read `/docs/../secret.txt`, write files, or call `send_email`
 
 ## Phase 4: Tamper-evident ledger (Weeks 7–8)
-- [ ] 4.1 `LedgerEntry {seq, ts, token_id, tool, args_hash, decision, reason, result_hash}` with canonical serialization
-- [ ] 4.2 Gateway Ed25519 key; every entry is signed
-- [ ] 4.3 RFC 6962 Merkle tree: leaf hash `H(0x00‖d)`, node hash `H(0x01‖l‖r)`; tested against the RFC vectors
-- [ ] 4.4 Inclusion proof (entry `i` is in a tree of size `n`) and consistency proof (tree `m` is a prefix of tree `n`): generate and verify
-- [ ] 4.5 SQLite storage (`rusqlite`): `entries` and `tree_heads` tables; append-only API
-- [ ] 4.6 Signed Tree Head every N entries or T seconds, and on shutdown
-- [ ] 4.7 Gateway appends on every decision (allowed **and** denied); if the ledger write fails, the call is denied
-- [ ] 4.8 CLI: `log show`, `log verify --pub gateway.pub`, `log prove <seq>`, `log consistency <old> <new>`
-- [ ] 4.9 Tamper tests: edit, delete, reorder or truncate rows → `verify` names the bad entry
+- [x] 4.1 `LedgerEntry {seq, ts, token_id, tool, args_hash, decision, reason, result_hash, call_seq}` with canonical serialization (allowed calls write `allow` before forwarding and `completed` after)
+- [x] 4.2 Gateway Ed25519 key; every entry is signed
+- [x] 4.3 RFC 6962 Merkle tree: leaf hash `H(0x00‖d)`, node hash `H(0x01‖l‖r)`; tested against the RFC vectors
+- [x] 4.4 Inclusion proof (entry `i` is in a tree of size `n`) and consistency proof (tree `m` is a prefix of tree `n`): generate and verify
+- [x] 4.5 SQLite storage (`rusqlite`): `entries` and `tree_heads` tables; append-only API
+- [x] 4.6 Signed Tree Head every N entries or T seconds, and on shutdown
+- [x] 4.7 Gateway appends on every decision (allowed **and** denied); if the ledger write fails, the call is denied
+- [x] 4.8 CLI: `log show`, `log verify --pub gateway.pub`, `log prove <seq>`, `log consistency <old> <new>`
+- [x] 4.9 Tamper tests: edit, delete, reorder or truncate rows → `verify` names the bad entry
 - **Done when:** a verifier with only the public key and the DB file detects any modification
 
 ## Phase 5: Injection demo (Week 9)
-- [ ] 5.1 Mock servers in `demo/`: `fetch` (serves `poisoned.html`), `email` (records "sent" mail), and a filesystem over `demo/docs/` + `demo/secrets/`
-- [ ] 5.2 Policy: `fetch` only `*.example.test`, `read_file` only `demo/docs/**`, no `send_email`
-- [ ] 5.3 Scenario: "Summarize https://news.example.test", where the page tells the agent to email the secrets to `attacker@evil.test`
-- [ ] 5.4 `demo/run.sh` / `run.ps1`: run A without ironwrit (the exfiltration gets recorded), run B with ironwrit (denied, and the ledger proves it)
-- [ ] 5.5 Sub-agent demo: attenuate the token for a "summarizer" sub-agent that only gets fetch access
-- [ ] 5.6 Record an asciinema/GIF for the README
+- [x] 5.1 Mock tools in `demo/`: `fetch` (serves `web/news.example.test.html`), `send_email` (records "sent" mail), and a filesystem over `demo/docs/` + `demo/secrets/`. One server, since the gateway proxies a single upstream; plus a scripted gullible agent
+- [x] 5.2 Policy: `fetch` only `*.example.test`, `read_file` only `demo/docs/**`, no `send_email`
+- [x] 5.3 Scenario: "Summarize https://news.example.test", where the page tells the agent to email the secrets to `attacker@evil.test`
+- [x] 5.4 `demo/run.sh` / `run.ps1`: run A without ironwrit (the exfiltration gets recorded), run B with ironwrit (denied, and the ledger proves it)
+- [x] 5.5 Sub-agent demo: attenuate the token for a "summarizer" sub-agent that only gets fetch access
+- [ ] 5.6 Record an asciinema/GIF for the README (the README shows a text transcript for now)
 - **Done when:** anyone can reproduce both runs in under 5 minutes
 
 ## Phase 6: Hardening (Week 10)
-- [ ] 6.1 `cargo-fuzz` targets: canonicalization, fact extractors, ledger entry decoding
-- [ ] 6.2 `criterion` benchmarks: authorize latency (goal < 1 ms), ledger append throughput
-- [ ] 6.3 `cargo audit` + `cargo deny` in CI
-- [ ] 6.4 `docs/THREAT_MODEL.md`: assets, attackers, trust boundaries, non-goals (e.g. a compromised gateway host, bugs in upstream servers)
-- [ ] 6.5 Fix findings and add a regression test for each
+- [x] 6.1 `cargo-fuzz` targets: canonicalization, fact extractors, ledger entry decoding (`fuzz/`, run weekly in CI for 1 hour; stable proptest versions in `tests/robustness.rs`)
+- [x] 6.2 `criterion` benchmarks: authorize latency (goal < 1 ms), ledger append throughput (results in `docs/BENCHMARKS.md`)
+- [x] 6.3 `cargo audit` + `cargo deny` in CI
+- [x] 6.4 `docs/THREAT_MODEL.md`: assets, attackers, trust boundaries, non-goals (e.g. a compromised gateway host, bugs in upstream servers)
+- [x] 6.5 Fix findings and add a regression test for each:
+  - canonicalization errors echoed argument values into denial reasons (and so the ledger)
+  - an agent with file access could read or replace the gateway's keys, ledger or config
+  - Windows: non-final path components ending in a space or dot weren't a fixed point
+  - `https://0..` canonicalized to host `0`, which re-parses as `0.0.0.0`
 - **Done when:** 1 hour of fuzzing finds nothing new, and benchmarks are published
 
 ## Phase 7: Polish and release (Week 11)
-- [ ] 7.1 README: the problem, demo GIF, quickstart, architecture diagram, and a comparison to prior art (Biscuit, Macaroons, Tenuo, CT logs)
-- [ ] 7.2 `docs/DESIGN.md`: token format, fact schema, ledger format, proof algorithms
-- [ ] 7.3 Example policies in `examples/policies/`
-- [ ] 7.4 Tag `v0.1.0` and publish GitHub release binaries (Windows/Linux/macOS)
-- [ ] 7.5 Blog post or writeup, linked from the README and your portfolio
+- [x] 7.1 README: the problem, demo GIF, quickstart, architecture diagram, and a comparison to prior art (Biscuit, Macaroons, Tenuo, CT logs)
+- [x] 7.2 `docs/DESIGN.md`: token format, fact schema, ledger format, proof algorithms
+- [x] 7.3 Example policies in `examples/policies/`
+- [ ] 7.4 Tag `v0.1.0` and publish GitHub release binaries (Windows/Linux/macOS) (`.github/workflows/release.yml` builds them when the tag is pushed)
+- [ ] 7.5 Blog post or writeup, linked from the README and your portfolio (draft in `docs/WRITEUP.md`)
 
 ## Stretch goals (after v0.1)
 - Multiple upstream servers behind one gateway (namespaced tools)

@@ -1,0 +1,11 @@
+// A research assistant: it may fetch pages on *.example.test over HTTPS and
+// read files under docs/. Nothing grants send_email.
+//
+// Mint with: ironwrit mint --policy policy.dl --path docs=docs
+right("fetch");
+right("read_file");
+right("list_directory");
+
+reject if url_scheme($s), $s != "https";
+reject if url_host($h), !$h.ends_with(".example.test");
+reject if path($p), $p != {docs}, !$p.starts_with({docs} + "/");

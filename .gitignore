@@ -10,3 +10,13 @@
 
 .vscode/
 .idea/
+
+# Demo runs write keys, tokens, the ledger and the outbox here.
+/demo/out/
+
+# cargo-fuzz output
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/
+/fuzz/coverage/
+/fuzz/Cargo.lock

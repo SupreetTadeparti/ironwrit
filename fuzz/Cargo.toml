@@ -1,0 +1,38 @@
+[package]
+name = "ironwrit-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+# Not part of the main workspace: it needs a nightly toolchain.
+[workspace]
+
+[dependencies]
+ironwrit-ledger = { path = "../crates/ironwrit-ledger" }
+ironwrit-token = { path = "../crates/ironwrit-token" }
+libfuzzer-sys = "0.4"
+serde_json = "1"
+
+[[bin]]
+name = "canonicalize"
+path = "fuzz_targets/canonicalize.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "extract"
+path = "fuzz_targets/extract.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ledger_decode"
+path = "fuzz_targets/ledger_decode.rs"
+test = false
+doc = false
+bench = false

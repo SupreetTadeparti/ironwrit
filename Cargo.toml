@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = ["crates/*", "demo"]
+exclude = ["fuzz"]
 
 [workspace.package]
 version = "0.1.0"
@@ -10,20 +11,25 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/SupreetTadeparti/ironwrit"
 
 [workspace.dependencies]
-ironwrit-token = { path = "crates/ironwrit-token" }
-ironwrit-ledger = { path = "crates/ironwrit-ledger" }
-ironwrit-gateway = { path = "crates/ironwrit-gateway" }
+ironwrit-token = { path = "crates/ironwrit-token", version = "0.1.0" }
+ironwrit-ledger = { path = "crates/ironwrit-ledger", version = "0.1.0" }
+ironwrit-gateway = { path = "crates/ironwrit-gateway", version = "0.1.0" }
 
 anyhow = "1"
 biscuit-auth = "6"
 clap = { version = "4", features = ["derive", "env"] }
+criterion = "0.8"
+ed25519-dalek = { version = "2", features = ["pkcs8", "pem"] }
+hex = "0.4"
 humantime = "2"
 idna = "1"
 percent-encoding = "2"
 proptest = "1"
+rusqlite = { version = "0.41", features = ["bundled"] }
 rmcp = { version = "3.8", default-features = false, features = ["client", "elicitation", "server", "transport-io"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
 tempfile = "3"
 thiserror = "2"
 tokio = { version = "1", features = ["io-std", "io-util", "macros", "process", "rt-multi-thread", "sync", "time"] }

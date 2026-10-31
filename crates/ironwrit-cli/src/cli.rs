@@ -45,6 +45,15 @@ pub enum Command {
         #[arg(long)]
         policy: PathBuf,
 
+        /// Bind `{NAME}` in the policy to a string. Repeatable.
+        #[arg(long = "param", value_name = "NAME=VALUE", value_parser = parse_binding)]
+        params: Vec<(String, String)>,
+
+        /// Bind `{NAME}` to the canonical form of a path, so policies stay
+        /// portable, e.g. `--path docs=./docs`. Repeatable.
+        #[arg(long = "path", value_name = "NAME=PATH", value_parser = parse_binding)]
+        paths: Vec<(String, String)>,
+
         /// Expire the token after this long, e.g. `8h` or `30m`.
         #[arg(long, value_parser = humantime::parse_duration)]
         ttl: Option<Duration>,
@@ -102,8 +111,21 @@ pub enum Command {
         config: PathBuf,
 
         /// Ledger database to append decisions to.
-        #[arg(long, default_value = "ironwrit.db")]
+        #[arg(long, env = "IRONWRIT_LEDGER", default_value = "ironwrit.db")]
         ledger: PathBuf,
+
+        /// Key the gateway signs ledger entries with. Created, along with a
+        /// matching `.pub`, if it doesn't exist.
+        #[arg(long, env = "IRONWRIT_GATEWAY_KEY", default_value = "gateway.key")]
+        gateway_key: PathBuf,
+
+        /// Sign a tree head after this many new entries.
+        #[arg(long, default_value_t = 64)]
+        head_every: u64,
+
+        /// Also sign one this often while there are new entries (0 disables).
+        #[arg(long, default_value = "30s", value_parser = humantime::parse_duration)]
+        head_interval: Duration,
 
         /// Upstream MCP server command and its arguments.
         #[arg(last = true, required = true, value_name = "UPSTREAM")]
@@ -113,7 +135,12 @@ pub enum Command {
     /// Inspect and verify the action log.
     Log {
         /// Ledger database.
-        #[arg(long, default_value = "ironwrit.db", global = true)]
+        #[arg(
+            long,
+            env = "IRONWRIT_LEDGER",
+            default_value = "ironwrit.db",
+            global = true
+        )]
         db: PathBuf,
 
         #[command(subcommand)]
@@ -127,17 +154,43 @@ pub enum LogCommand {
     Show,
 
     /// Check every signature and the Merkle tree against the gateway public key.
+    ///
+    /// Exits non-zero and names each bad entry if anything was modified,
+    /// deleted, reordered or truncated.
     Verify {
         /// Gateway public key.
-        #[arg(long = "pub")]
+        #[arg(long = "pub", default_value = "gateway.pub")]
         public_key: PathBuf,
     },
 
-    /// Produce an inclusion proof that entry SEQ is in the log.
-    Prove { seq: u64 },
+    /// Print a JSON inclusion proof that entry SEQ is in the newest signed tree.
+    Prove {
+        seq: u64,
 
-    /// Produce a consistency proof that tree size OLD is a prefix of tree size NEW.
-    Consistency { old: u64, new: u64 },
+        /// Also check the proof against this gateway public key.
+        #[arg(long = "pub")]
+        public_key: Option<PathBuf>,
+    },
+
+    /// Print a JSON proof that tree size OLD is a prefix of tree size NEW.
+    Consistency {
+        old: u64,
+        new: u64,
+
+        /// Also check the proof against this gateway public key.
+        #[arg(long = "pub")]
+        public_key: Option<PathBuf>,
+    },
+}
+
+fn parse_binding(s: &str) -> Result<(String, String), String> {
+    let (name, value) = s
+        .split_once('=')
+        .ok_or_else(|| format!("expected NAME=VALUE, got `{s}`"))?;
+    if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err(format!("`{name}` is not a valid parameter name"));
+    }
+    Ok((name.to_owned(), value.to_owned()))
 }
 
 #[cfg(test)]

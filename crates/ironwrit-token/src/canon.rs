@@ -11,6 +11,8 @@ use url::{Host, Url};
 
 use crate::{Error, Result};
 
+/// Messages never echo the input: they end up in the ledger, which must not
+/// hold raw arguments (a URL can carry an API key).
 fn invalid(msg: impl Into<String>) -> Error {
     Error::InvalidArgument(msg.into())
 }
@@ -30,9 +32,7 @@ pub fn canonical_path(input: &str, base: &Path) -> Result<String> {
     }
     // Servers disagree on whether `~` means the home directory.
     if input.starts_with('~') {
-        return Err(invalid(format!(
-            "paths starting with `~` are not supported: {input}"
-        )));
+        return Err(invalid("paths starting with `~` are not supported"));
     }
     #[cfg(windows)]
     check_windows_syntax(input)?;
@@ -50,9 +50,7 @@ pub fn canonical_path(input: &str, base: &Path) -> Result<String> {
     // resolves `..` lexically, so there is only one reading there.
     #[cfg(not(windows))]
     if resolve_like_kernel(&absolute)? != resolved {
-        return Err(invalid(format!(
-            "ambiguous path (symlink followed by `..`): {input}"
-        )));
+        return Err(invalid("ambiguous path (symlink followed by `..`)"));
     }
     to_canonical_string(&resolved)
 }
@@ -81,9 +79,7 @@ fn resolve_like_kernel(path: &Path) -> Result<PathBuf> {
 fn check_windows_syntax(input: &str) -> Result<()> {
     let slashed = input.replace('\\', "/");
     if slashed.starts_with("//?/") || slashed.starts_with("//./") {
-        return Err(invalid(format!(
-            "device and verbatim paths are not supported: {input}"
-        )));
+        return Err(invalid("device and verbatim paths are not supported"));
     }
     // A colon is only valid right after a drive letter; elsewhere it names an
     // alternate data stream.
@@ -92,9 +88,19 @@ fn check_windows_syntax(input: &str) -> Result<()> {
         _ => input,
     };
     if after_drive.contains(':') {
-        return Err(invalid(format!(
-            "alternate data streams are not supported: {input}"
-        )));
+        return Err(invalid("alternate data streams are not supported"));
+    }
+    // Win32 strips trailing dots and spaces from the last component only, so
+    // `docs /` names `docs ` but `docs ` alone names `docs`.
+    let mut components: Vec<&str> = slashed.split('/').collect();
+    components.pop();
+    let ambiguous = components
+        .iter()
+        .any(|c| *c != "." && *c != ".." && (c.ends_with(' ') || c.ends_with('.')));
+    if ambiguous {
+        return Err(invalid(
+            "path components ending in a space or dot are ambiguous on Windows",
+        ));
     }
     Ok(())
 }
@@ -126,7 +132,7 @@ fn resolve_symlinks(path: &Path) -> Result<PathBuf> {
             }
             Err(_) => {
                 let (Some(parent), Some(name)) = (existing.parent(), existing.file_name()) else {
-                    return Err(invalid(format!("no existing ancestor: {}", path.display())));
+                    return Err(invalid("path has no existing ancestor"));
                 };
                 missing.push(name);
                 existing = parent;
@@ -138,7 +144,7 @@ fn resolve_symlinks(path: &Path) -> Result<PathBuf> {
 fn to_canonical_string(path: &Path) -> Result<String> {
     let s = path
         .to_str()
-        .ok_or_else(|| invalid(format!("path is not valid UTF-8: {}", path.display())))?;
+        .ok_or_else(|| invalid("path is not valid UTF-8"))?;
     #[cfg(windows)]
     let s = {
         let s = if let Some(unc) = s.strip_prefix(r"\\?\UNC\") {
@@ -170,28 +176,34 @@ pub struct CanonicalUrl {
 
 /// Parse a URL the way browsers do (WHATWG), then reduce it to its parts.
 pub fn canonical_url(input: &str) -> Result<CanonicalUrl> {
-    let url = Url::parse(input.trim()).map_err(|e| invalid(format!("bad URL {input:?}: {e}")))?;
+    let url = Url::parse(input.trim()).map_err(|e| invalid(format!("bad URL: {e}")))?;
     if !url.username().is_empty() || url.password().is_some() {
-        return Err(invalid(format!(
-            "URLs with credentials are not supported: {input}"
-        )));
+        return Err(invalid("URLs with credentials are not supported"));
     }
     let host = match url.host() {
-        Some(Host::Domain(domain)) => domain.trim_end_matches('.').to_ascii_lowercase(),
+        // One trailing dot is the fully qualified form of the same name; empty
+        // labels (`a..b`, `x..`) aren't a real host and could re-parse as an IP.
+        Some(Host::Domain(domain)) => {
+            let domain = domain.strip_suffix('.').unwrap_or(domain);
+            if domain.split('.').any(str::is_empty) {
+                return Err(invalid("URL host has an empty label"));
+            }
+            domain.to_ascii_lowercase()
+        }
         Some(Host::Ipv4(ip)) => ip.to_string(),
         Some(Host::Ipv6(ip)) => ip.to_string(),
-        None => return Err(invalid(format!("URL has no host: {input}"))),
+        None => return Err(invalid("URL has no host")),
     };
     if host.is_empty() {
-        return Err(invalid(format!("URL has no host: {input}")));
+        return Err(invalid("URL has no host"));
     }
     let port = url
         .port_or_known_default()
-        .ok_or_else(|| invalid(format!("URL has no port: {input}")))?;
+        .ok_or_else(|| invalid("URL has no port"))?;
 
     let path = percent_decode_str(url.path())
         .decode_utf8()
-        .map_err(|_| invalid(format!("URL path is not valid UTF-8: {input}")))?
+        .map_err(|_| invalid("URL path is not valid UTF-8"))?
         .into_owned();
     // Encoded dots and slashes survive URL parsing; once decoded they could
     // walk out of a prefix the policy allowed.
@@ -201,7 +213,7 @@ pub fn canonical_url(input: &str) -> Result<CanonicalUrl> {
             .split('/')
             .any(|segment| segment == "." || segment == "..");
     if ambiguous {
-        return Err(invalid(format!("ambiguous URL path: {input}")));
+        return Err(invalid("ambiguous URL path"));
     }
     Ok(CanonicalUrl {
         scheme: url.scheme().to_owned(),
@@ -226,7 +238,7 @@ pub fn canonical_email(input: &str) -> Result<CanonicalEmail> {
         (Some(open), Some(inner)) => &inner[open + 1..],
         _ => trimmed,
     };
-    let bad = || invalid(format!("bad email address: {input:?}"));
+    let bad = || invalid("bad email address");
     if address
         .chars()
         .any(|c| c.is_whitespace() || c.is_control() || ",;<>\"()[]\\".contains(c))
@@ -339,6 +351,10 @@ mod tests {
             r"\\?\C:\docs\a.txt",
             r"\\.\pipe\x",
             "//?/c:/x",
+            // Regressions found by tests/robustness.rs: not fixed points.
+            "docs /a.txt",
+            "docs./a.txt",
+            "\u{130} /",
         ] {
             assert!(
                 canonical_path(p, dir.path()).is_err(),
@@ -433,7 +449,14 @@ mod tests {
 
     #[test]
     fn urls_without_hosts_are_rejected() {
-        for u in ["mailto:a@b.test", "file:///etc/passwd", "not a url"] {
+        // `https://0..` is a regression found by tests/robustness.rs.
+        for u in [
+            "mailto:a@b.test",
+            "file:///etc/passwd",
+            "not a url",
+            "https://0..",
+            "https://a..b/",
+        ] {
             assert!(canonical_url(u).is_err(), "{u} should be rejected");
         }
     }

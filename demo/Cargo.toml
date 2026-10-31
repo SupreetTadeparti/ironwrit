@@ -1,0 +1,20 @@
+[package]
+name = "ironwrit-demo"
+description = "Mock MCP tools and a gullible scripted agent for the Ironwrit injection demo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+rmcp.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+which.workspace = true
+
+[lints]
+workspace = true

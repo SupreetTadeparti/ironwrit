@@ -74,6 +74,7 @@ impl Config {
 pub struct FactExtractor {
     config: Config,
     base_dir: PathBuf,
+    protected: Vec<String>,
 }
 
 impl FactExtractor {
@@ -81,7 +82,35 @@ impl FactExtractor {
         Self {
             config,
             base_dir: base_dir.into(),
+            protected: Vec::new(),
         }
+    }
+
+    /// Refuse file arguments that touch these canonical paths, whatever the
+    /// token says: the gateway's own keys, ledger and config. Reading or
+    /// writing them, or writing (moving, deleting) a directory above them,
+    /// is denied.
+    pub fn protect(mut self, paths: impl IntoIterator<Item = String>) -> Self {
+        self.protected.extend(paths);
+        self
+    }
+
+    fn check_protected(&self, path: &str, op: FsOp) -> Result<()> {
+        let under = |child: &str, parent: &str| {
+            child == parent
+                || child
+                    .strip_prefix(parent)
+                    .is_some_and(|rest| rest.starts_with('/') || parent.ends_with('/'))
+        };
+        let hit = self.protected.iter().any(|protected| {
+            under(path, protected) || (matches!(op, FsOp::Write) && under(protected, path))
+        });
+        if hit {
+            return Err(Error::InvalidArgument(
+                "refers to a file the gateway protects (its keys, ledger or config)".into(),
+            ));
+        }
+        Ok(())
     }
 
     pub fn facts(&self, call: &ToolCall) -> Result<Vec<Fact>> {
@@ -92,14 +121,15 @@ impl FactExtractor {
         match extractor {
             Extractor::Fs { op, args } => {
                 facts.push(fact("op", &[string(op.as_str())]));
-                for value in values(call, args)? {
-                    let path = canonical_path(value, &self.base_dir)?;
+                for (name, value) in values(call, args)? {
+                    let path = canonical_path(value, &self.base_dir).map_err(in_arg(name))?;
+                    self.check_protected(&path, *op).map_err(in_arg(name))?;
                     facts.push(fact("path", &[string(&path)]));
                 }
             }
             Extractor::Url { args } => {
-                for value in values(call, args)? {
-                    let url = canonical_url(value)?;
+                for (name, value) in values(call, args)? {
+                    let url = canonical_url(value).map_err(in_arg(name))?;
                     facts.push(fact("url_scheme", &[string(&url.scheme)]));
                     facts.push(fact("url_host", &[string(&url.host)]));
                     facts.push(fact("url_port", &[int(i64::from(url.port))]));
@@ -107,8 +137,8 @@ impl FactExtractor {
                 }
             }
             Extractor::Email { args } => {
-                for value in values(call, args)? {
-                    let email = canonical_email(value)?;
+                for (name, value) in values(call, args)? {
+                    let email = canonical_email(value).map_err(in_arg(name))?;
                     facts.push(fact("recipient", &[string(&email.address)]));
                     facts.push(fact("recipient_domain", &[string(&email.domain)]));
                 }
@@ -118,9 +148,17 @@ impl FactExtractor {
     }
 }
 
+/// Say which argument a canonicalization error came from.
+fn in_arg(name: &str) -> impl Fn(Error) -> Error + '_ {
+    move |e| match e {
+        Error::InvalidArgument(msg) => Error::InvalidArgument(format!("`{name}`: {msg}")),
+        other => other,
+    }
+}
+
 /// The string values of the named arguments. Each may be a string or an array
 /// of strings; missing arguments are skipped, anything else is an error.
-fn values<'a>(call: &'a ToolCall, args: &[String]) -> Result<Vec<&'a str>> {
+fn values<'a>(call: &'a ToolCall, args: &'a [String]) -> Result<Vec<(&'a str, &'a str)>> {
     let mut out = Vec::new();
     for name in args {
         let wrong_type = || {
@@ -131,10 +169,10 @@ fn values<'a>(call: &'a ToolCall, args: &[String]) -> Result<Vec<&'a str>> {
         };
         match call.arguments.get(name) {
             None | Some(Value::Null) => {}
-            Some(Value::String(s)) => out.push(s.as_str()),
+            Some(Value::String(s)) => out.push((name.as_str(), s.as_str())),
             Some(Value::Array(items)) => {
                 for item in items {
-                    out.push(item.as_str().ok_or_else(wrong_type)?);
+                    out.push((name.as_str(), item.as_str().ok_or_else(wrong_type)?));
                 }
             }
             Some(_) => return Err(wrong_type()),
@@ -180,6 +218,76 @@ mod tests {
 
     fn call(name: &str, args: Value) -> ToolCall {
         ToolCall::new(name, args.as_object().cloned().unwrap_or_default())
+    }
+
+    /// Regression: an agent with broad file access could read the root key,
+    /// replace a public key, or move the ledger away.
+    #[test]
+    fn gateway_files_are_protected() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("state")).unwrap();
+        let protected = canonical_path("state/root.key", dir.path()).unwrap();
+        let extractor =
+            FactExtractor::new(Config::parse(CONFIG).unwrap(), dir.path()).protect([protected]);
+        let fs_config = r#"
+            [tools.move_file]
+            extract = "fs"
+            op = "write"
+            args = ["source"]
+        "#;
+        let mover = FactExtractor::new(Config::parse(fs_config).unwrap(), dir.path())
+            .protect([canonical_path("state/root.key", dir.path()).unwrap()]);
+        let denied =
+            |e: &FactExtractor, name: &str, args: Value| e.facts(&call(name, args)).is_err();
+
+        assert!(denied(
+            &extractor,
+            "read_file",
+            json!({"path": "state/root.key"})
+        ));
+        assert!(
+            denied(
+                &extractor,
+                "read_file",
+                json!({"path": "state/../state/ROOT.key"})
+            ) == cfg!(windows)
+        );
+        assert!(denied(
+            &extractor,
+            "read_multiple_files",
+            json!({"paths": ["a.txt", "state/root.key"]})
+        ));
+        assert!(denied(&mover, "move_file", json!({"source": "state"})));
+        assert!(denied(&mover, "move_file", json!({"source": "."})));
+        // Listing the directory, or touching its neighbours, is fine.
+        assert!(!denied(&extractor, "read_file", json!({"path": "state"})));
+        assert!(!denied(
+            &extractor,
+            "read_file",
+            json!({"path": "state/root.key.txt"})
+        ));
+        assert!(!denied(
+            &mover,
+            "move_file",
+            json!({"source": "state/other"})
+        ));
+    }
+
+    /// Regression: errors used to echo the argument, and denial reasons are
+    /// stored in the ledger, which must never hold raw arguments.
+    #[test]
+    fn errors_name_the_argument_but_not_its_value() {
+        for (tool, args) in [
+            ("fetch", json!({"url": "https://user:sekrit@x.test/"})),
+            ("fetch", json!({"url": "https://x.test/%5csekrit"})),
+            ("fetch", json!({"url": "sekrit not a url"})),
+            ("send_email", json!({"to": "sekrit, other@x.test"})),
+            ("read_file", json!({"path": "~/sekrit"})),
+        ] {
+            let message = extract(tool, args).unwrap_err().to_string();
+            assert!(!message.contains("sekrit"), "{message}");
+            assert!(message.contains('`'), "no argument name: {message}");
+        }
     }
 
     fn extract(name: &str, args: Value) -> Result<String> {

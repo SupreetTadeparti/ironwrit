@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use ironwrit_gateway::Upstream;
+use ironwrit_ledger::{HeadPolicy, Ledger, LedgerEntry, Log, SigningKey};
 use ironwrit_token::{AllowAll, CallPolicy, Decision, ToolCall};
 use rmcp::model::*;
 use rmcp::service::{NotificationContext, RequestContext, RunningService};
@@ -126,12 +127,26 @@ impl CallPolicy for DenyTool {
 
 struct Harness {
     agent: RunningService<RoleClient, MockAgent>,
+    ledger: Arc<Ledger>,
     gateway: JoinHandle<ironwrit_gateway::Result<()>>,
     upstream_calls: Arc<AtomicUsize>,
     notifications: mpsc::UnboundedReceiver<&'static str>,
 }
 
+fn gateway_key() -> SigningKey {
+    SigningKey::from_bytes(&[3; 32])
+}
+
 async fn start(policy: impl CallPolicy, protocol_version: ProtocolVersion) -> Harness {
+    let ledger = Ledger::open_in_memory(gateway_key(), HeadPolicy::default()).unwrap();
+    start_with(policy, protocol_version, Arc::new(ledger)).await
+}
+
+async fn start_with(
+    policy: impl CallPolicy,
+    protocol_version: ProtocolVersion,
+    ledger: Arc<Ledger>,
+) -> Harness {
     let upstream = MockUpstream::default();
     let upstream_calls = upstream.calls.clone();
 
@@ -146,6 +161,7 @@ async fn start(policy: impl CallPolicy, protocol_version: ProtocolVersion) -> Ha
     let (up_read, up_write) = tokio::io::split(gateway_up);
     let gateway = tokio::spawn(ironwrit_gateway::serve(
         policy,
+        ledger.clone(),
         Upstream::from_io(up_read, up_write),
         tokio::io::split(gateway_down),
     ));
@@ -162,6 +178,7 @@ async fn start(policy: impl CallPolicy, protocol_version: ProtocolVersion) -> Ha
 
     Harness {
         agent,
+        ledger,
         gateway,
         upstream_calls,
         notifications,
@@ -333,4 +350,79 @@ async fn token_denies_ungranted_tools_with_a_reason() {
         "denied: tool `roots` is not granted by the token"
     );
     assert_eq!(h.upstream_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn every_decision_is_recorded() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ironwrit.db");
+    let ledger = Arc::new(Ledger::open(&path, gateway_key(), HeadPolicy::default()).unwrap());
+    let h = start_with(
+        DenyTool("roots"),
+        ProtocolVersion::LATEST_WITH_INITIALIZE,
+        ledger,
+    )
+    .await;
+
+    call(&h.agent, "echo", json!({"secret": "hunter2"})).await;
+    call(&h.agent, "roots", json!({})).await;
+    call(&h.agent, "fail", json!({})).await;
+    assert_eq!(h.ledger.size(), 5);
+
+    // Ending the session signs a tree head over everything.
+    h.agent.cancel().await.unwrap();
+    h.gateway.await.unwrap().unwrap();
+    let log = Log::open(&path).unwrap();
+    let report = log.verify(&gateway_key().verifying_key()).unwrap();
+    assert!(report.is_ok(), "{:?}", report.problems);
+    assert_eq!(report.uncovered(), 0);
+
+    let entries = log.entries().unwrap();
+    let summary: Vec<_> = entries
+        .iter()
+        .map(|e: &LedgerEntry| (e.tool.as_str(), e.decision.as_str(), e.reason.as_str()))
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            ("echo", "allow", ""),
+            ("echo", "completed", "ok"),
+            ("roots", "deny", "roots is not allowed"),
+            ("fail", "allow", ""),
+            ("fail", "completed", "tool_error"),
+        ]
+    );
+    assert_eq!(entries[1].call_seq, Some(0));
+    assert!(entries[1].result_hash.is_some());
+    assert_eq!(entries[0].token_id, "none");
+    assert_eq!(
+        entries[0].args_hash,
+        ironwrit_ledger::hash_json(&json!({"secret": "hunter2"}))
+    );
+    // Arguments are hashed, never stored.
+    let raw = std::fs::read(&path).unwrap();
+    assert!(!raw.windows(7).any(|w| w == b"hunter2"));
+}
+
+#[tokio::test]
+async fn ledger_failure_denies_the_call() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ironwrit.db");
+    let ledger = Arc::new(Ledger::open(&path, gateway_key(), HeadPolicy::default()).unwrap());
+    let h = start_with(AllowAll, ProtocolVersion::LATEST_WITH_INITIALIZE, ledger).await;
+
+    // Break the database out from under the gateway.
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute_batch("DROP TABLE entries;")
+        .unwrap();
+
+    let result = call(&h.agent, "echo", json!({"message": "hi"})).await;
+    assert_eq!(result.is_error, Some(true));
+    assert!(
+        text(&result).starts_with("denied: the call could not be recorded"),
+        "{}",
+        text(&result)
+    );
+    assert_eq!(h.upstream_calls.load(Ordering::SeqCst), 0);
 }

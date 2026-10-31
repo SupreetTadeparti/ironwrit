@@ -3,9 +3,10 @@
 #![allow(deprecated)]
 
 use std::borrow::Cow;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
+use ironwrit_ledger::{Ledger, LedgerEntry, Record, hash_json};
 use ironwrit_token::{CallPolicy, Decision, ToolCall};
 use rmcp::model::*;
 use rmcp::service::{NotificationContext, RequestContext};
@@ -21,10 +22,15 @@ use crate::upstream::{BoxRead, BoxWrite};
 /// server-to-client requests, which the relay depends on.
 const MAX_PROTOCOL: ProtocolVersion = ProtocolVersion::LATEST_WITH_INITIALIZE;
 
-/// MCP server facing the agent. Relays everything to the upstream server and
-/// checks each `tools/call` against the policy first.
+/// Longest reason recorded in the ledger, in bytes.
+const MAX_REASON: usize = 4096;
+
+/// MCP server facing the agent. Relays everything to the upstream server,
+/// checks each `tools/call` against the policy first, and records every
+/// decision in the ledger.
 pub(crate) struct Gateway<P> {
     policy: P,
+    ledger: Arc<Ledger>,
     /// Taken on `initialize`, when the upstream handshake happens.
     upstream_io: Mutex<Option<(BoxRead, BoxWrite)>>,
     upstream: OnceLock<Connected>,
@@ -41,11 +47,13 @@ struct Connected {
 impl<P: CallPolicy> Gateway<P> {
     pub(crate) fn new(
         policy: P,
+        ledger: Arc<Ledger>,
         upstream_io: (BoxRead, BoxWrite),
         shutdown: CancellationToken,
     ) -> Self {
         Self {
             policy,
+            ledger,
             upstream_io: Mutex::new(Some(upstream_io)),
             upstream: OnceLock::new(),
             shutdown,
@@ -57,6 +65,14 @@ impl<P: CallPolicy> Gateway<P> {
             .get()
             .map(|connected| &connected.peer)
             .ok_or_else(|| McpError::internal_error("upstream not connected", None))
+    }
+
+    /// Append to the ledger without blocking the async runtime on SQLite.
+    async fn record(&self, record: Record) -> ironwrit_ledger::Result<LedgerEntry> {
+        let ledger = self.ledger.clone();
+        tokio::task::spawn_blocking(move || ledger.append(record))
+            .await
+            .unwrap_or_else(|e| Err(std::io::Error::other(e.to_string()).into()))
     }
 }
 
@@ -155,32 +171,79 @@ impl<P: CallPolicy> ServerHandler for Gateway<P> {
             args = %serde_json::Value::Object(call.arguments.clone()),
             "tool call received"
         );
+        let args_hash = hash_json(&serde_json::Value::Object(call.arguments.clone()));
+        let record = |decision, reason: &str, result_hash, call_seq| Record {
+            token_id: self.policy.token_id().to_owned(),
+            tool: call.name.clone(),
+            args_hash,
+            decision,
+            reason: truncate(reason, MAX_REASON).to_owned(),
+            result_hash,
+            call_seq,
+        };
 
         if let Decision::Deny { reason } = self.policy.check(&call) {
+            let logged = self
+                .record(record(ironwrit_ledger::Decision::Deny, &reason, None, None))
+                .await;
             tracing::info!(
                 tool = %call.name,
                 decision = "deny",
                 %reason,
+                seq = logged.as_ref().ok().map(|e| e.seq),
                 latency_ms = elapsed_ms(started),
                 "tool call"
             );
-            let denial = ContentBlock::text(format!("denied: {reason}"));
-            return Ok(CallToolResult::error(vec![denial]).into());
+            if let Err(e) = logged {
+                tracing::error!(tool = %call.name, error = %e, "failed to record denial");
+            }
+            return Ok(denial(&reason));
         }
 
-        let result = upstream.call_tool_once(request).await;
-        let outcome = match &result {
-            Ok(CallToolResponse::Complete(r)) if r.is_error == Some(true) => "tool_error",
-            Ok(_) => "ok",
-            Err(_) => "relay_error",
+        // Record the decision before forwarding, so nothing happens unlogged.
+        let allowed = match self
+            .record(record(ironwrit_ledger::Decision::Allow, "", None, None))
+            .await
+        {
+            Ok(entry) => entry,
+            Err(e) => {
+                tracing::error!(tool = %call.name, error = %e, "ledger write failed; denying call");
+                return Ok(denial(&format!("the call could not be recorded ({e})")));
+            }
         };
+
+        let result = upstream.call_tool_once(request).await;
+        let (outcome, result_hash) = match &result {
+            Ok(response) => {
+                let outcome = match response {
+                    CallToolResponse::Complete(r) if r.is_error == Some(true) => "tool_error",
+                    _ => "ok",
+                };
+                (outcome.to_owned(), response_hash(response))
+            }
+            Err(e) => (format!("relay_error: {e}"), None),
+        };
+        let completed = self
+            .record(record(
+                ironwrit_ledger::Decision::Completed,
+                &outcome,
+                result_hash,
+                Some(allowed.seq),
+            ))
+            .await;
         tracing::info!(
             tool = %call.name,
             decision = "allow",
-            outcome,
+            outcome = outcome.split(':').next().unwrap_or_default(),
+            seq = allowed.seq,
             latency_ms = elapsed_ms(started),
             "tool call"
         );
+        if let Err(e) = completed {
+            tracing::error!(tool = %call.name, error = %e, "ledger write failed; withholding result");
+            let message = format!("the result could not be recorded ({e}), so it was withheld");
+            return Ok(CallToolResult::error(vec![ContentBlock::text(message)]).into());
+        }
         result.map_err(relay_error)
     }
 
@@ -425,6 +488,27 @@ fn relay_error(error: ServiceError) -> McpError {
         ServiceError::McpError(error) => error,
         other => McpError::internal_error(format!("relay failed: {other}"), None),
     }
+}
+
+fn denial(reason: &str) -> CallToolResponse {
+    CallToolResult::error(vec![ContentBlock::text(format!("denied: {reason}"))]).into()
+}
+
+/// SHA-256 of the result as the agent will see it on the wire.
+fn response_hash(response: &CallToolResponse) -> Option<ironwrit_ledger::Hash> {
+    let value = serde_json::to_value(ServerResult::from(response.clone())).ok()?;
+    Some(hash_json(&value))
+}
+
+fn truncate(s: &str, max: usize) -> &str {
+    if s.len() <= max {
+        return s;
+    }
+    let mut end = max;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
 }
 
 fn forwarded(result: Result<(), ServiceError>) {

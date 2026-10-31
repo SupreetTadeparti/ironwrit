@@ -1,0 +1,18 @@
+// Read the repository, write only under src/ and tests/, and never touch
+// secrets or git internals.
+//
+//   ironwrit mint --policy code-assistant.dl --path repo=. --ttl 2h
+right("read_text_file");
+right("read_multiple_files");
+right("list_directory");
+right("directory_tree");
+right("search_files");
+right("write_file");
+right("edit_file");
+right("create_directory");
+
+reject if path($p), $p != {repo}, !$p.starts_with({repo} + "/");
+reject if op("write"), path($p),
+    !$p.starts_with({repo} + "/src/"), !$p.starts_with({repo} + "/tests/");
+reject if path($p), $p.starts_with({repo} + "/.git/");
+reject if path($p), $p.ends_with("/.env");

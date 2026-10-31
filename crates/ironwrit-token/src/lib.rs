@@ -16,6 +16,6 @@ pub use error::{Error, Result};
 pub use extract::{Config, FactExtractor};
 pub use policy::{AllowAll, CallPolicy, Decision, ToolCall};
 pub use token::{
-    Inspection, attenuate, generate_keypair, inspect, mint, parse_token, read_private_key,
-    read_public_key, write_keypair,
+    Inspection, attenuate, generate_keypair, inspect, mint, mint_with_params, parse_token,
+    read_private_key, read_public_key, write_keypair,
 };

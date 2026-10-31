@@ -1,0 +1,8 @@
+// Fetch pages from a short list of sites, over HTTPS on the default port.
+//
+//   ironwrit mint --policy web-research.dl --ttl 1h
+right("fetch");
+
+reject if url_scheme($s), $s != "https";
+reject if url_port($p), $p != 443;
+reject if url_host($h), !["docs.rs", "doc.rust-lang.org", "en.wikipedia.org"].contains($h);

@@ -1,0 +1,12 @@
+// Read-only access to one folder, for server-filesystem.
+//
+//   ironwrit mint --policy read-only-docs.dl --path docs=./docs --ttl 8h
+right("read_text_file");
+right("read_file");
+right("read_multiple_files");
+right("list_directory");
+right("directory_tree");
+right("search_files");
+right("get_file_info");
+
+reject if path($p), $p != {docs}, !$p.starts_with({docs} + "/");

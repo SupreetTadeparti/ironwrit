@@ -28,13 +28,21 @@ pub struct BiscuitPolicy {
     token: Biscuit,
     extractor: FactExtractor,
     limits: AuthorizerLimits,
+    token_id: String,
 }
 
 impl BiscuitPolicy {
     /// `token` must already be verified against the root key (see
     /// [`crate::parse_token`]).
     pub fn new(token: Biscuit, extractor: FactExtractor) -> Self {
+        // The last block's revocation id: unique to this exact attenuation.
+        let token_id = token
+            .revocation_identifiers()
+            .last()
+            .map(|id| id.iter().map(|b| format!("{b:02x}")).collect())
+            .unwrap_or_default();
         Self {
+            token_id,
             token,
             extractor,
             // Biscuit's 1 ms default is tight enough to flake in debug builds.
@@ -91,6 +99,10 @@ impl CallPolicy for BiscuitPolicy {
             Ok(!rights.is_empty())
         });
         granted.unwrap_or(false)
+    }
+
+    fn token_id(&self) -> &str {
+        &self.token_id
     }
 }
 
@@ -404,6 +416,23 @@ mod tests {
                 .is_allowed()
         );
         assert!(!policy.could_permit("send_email"));
+    }
+
+    #[test]
+    fn token_id_changes_with_attenuation() {
+        let f = fixture();
+        let policy = f.policy(READ_DOCS);
+        assert_eq!(policy.token_id().len(), 128);
+        let narrowed = policy
+            .token
+            .append(
+                biscuit_auth::BlockBuilder::new()
+                    .code("check if tool(\"read_file\")")
+                    .unwrap(),
+            )
+            .unwrap();
+        let narrowed = BiscuitPolicy::new(narrowed, policy.extractor.clone());
+        assert_ne!(narrowed.token_id(), policy.token_id());
     }
 
     #[test]
