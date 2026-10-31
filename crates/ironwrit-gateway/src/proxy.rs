@@ -189,10 +189,23 @@ impl<P: CallPolicy> ServerHandler for Gateway<P> {
         request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
-        self.upstream()?
+        let mut result = self
+            .upstream()?
             .list_tools(request)
             .await
-            .map_err(relay_error)
+            .map_err(relay_error)?;
+        // Hide tools the policy could never allow, so the agent doesn't plan
+        // around them. Calls are still checked; this is only a courtesy.
+        let before = result.tools.len();
+        result
+            .tools
+            .retain(|tool| self.policy.could_permit(&tool.name));
+        tracing::debug!(
+            listed = result.tools.len(),
+            hidden = before - result.tools.len(),
+            "tools/list"
+        );
+        Ok(result)
     }
 
     async fn list_prompts(

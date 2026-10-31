@@ -7,8 +7,20 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+biscuit-auth.workspace = true
+humantime.workspace = true
+idna.workspace = true
+percent-encoding.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+toml.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true

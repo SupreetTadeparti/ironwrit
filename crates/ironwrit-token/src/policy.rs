@@ -40,6 +40,12 @@ impl Decision {
 /// Implementations must fail closed: if a call can't be evaluated, deny it.
 pub trait CallPolicy: Send + Sync + 'static {
     fn check(&self, call: &ToolCall) -> Decision;
+
+    /// Whether some call to `tool` might be allowed. Tools for which this is
+    /// false are hidden from `tools/list`.
+    fn could_permit(&self, _tool: &str) -> bool {
+        true
+    }
 }
 
 /// Allows every call. Used for pass-through mode until tokens are enforced.

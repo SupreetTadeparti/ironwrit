@@ -18,9 +18,13 @@ ironwrit-gateway.workspace = true
 
 anyhow.workspace = true
 clap.workspace = true
+humantime.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

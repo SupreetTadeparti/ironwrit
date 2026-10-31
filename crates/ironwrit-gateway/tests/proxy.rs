@@ -300,3 +300,37 @@ async fn gateway_exits_when_agent_disconnects() {
         .expect("gateway panicked");
     assert!(result.is_ok(), "gateway failed: {result:?}");
 }
+
+/// A real capability token that grants only `echo`.
+fn echo_only_token() -> ironwrit_token::BiscuitPolicy {
+    let root = ironwrit_token::generate_keypair();
+    let token = ironwrit_token::mint(r#"right("echo");"#, &root, None).unwrap();
+    let token = ironwrit_token::parse_token(&token, &root.public()).unwrap();
+    let extractor =
+        ironwrit_token::FactExtractor::new(ironwrit_token::Config::default(), std::env::temp_dir());
+    ironwrit_token::BiscuitPolicy::new(token, extractor)
+}
+
+#[tokio::test]
+async fn token_filters_tools_list() {
+    let h = start(echo_only_token(), ProtocolVersion::LATEST_WITH_INITIALIZE).await;
+    let tools = h.agent.list_all_tools().await.expect("list failed");
+    let names: Vec<_> = tools.iter().map(|t| t.name.as_ref()).collect();
+    assert_eq!(names, ["echo"]);
+}
+
+#[tokio::test]
+async fn token_denies_ungranted_tools_with_a_reason() {
+    let h = start(echo_only_token(), ProtocolVersion::LATEST_WITH_INITIALIZE).await;
+
+    let allowed = call(&h.agent, "echo", json!({"message": "hi"})).await;
+    assert_ne!(allowed.is_error, Some(true));
+
+    let denied = call(&h.agent, "roots", json!({})).await;
+    assert_eq!(denied.is_error, Some(true));
+    assert_eq!(
+        text(&denied),
+        "denied: tool `roots` is not granted by the token"
+    );
+    assert_eq!(h.upstream_calls.load(Ordering::SeqCst), 1);
+}

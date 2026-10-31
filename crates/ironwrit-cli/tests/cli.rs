@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::process::{Command, Output};
 
 fn ironwrit(args: &[&str]) -> Output {
@@ -39,18 +40,143 @@ fn unimplemented_commands_fail_with_roadmap_hint() {
     );
 }
 
-#[test]
-fn run_refuses_tokens_until_they_are_enforced() {
-    let out = Command::new(env!("CARGO_BIN_EXE_ironwrit"))
-        .args(["run", "--token", "abc", "--", "anything"])
+/// Run ironwrit in `dir`, with no token or key settings inherited.
+fn ironwrit_in(dir: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_ironwrit"))
+        .args(args)
+        .current_dir(dir)
         .env_remove("IRONWRIT_TOKEN")
+        .env_remove("IRONWRIT_ROOT_PUB")
+        .env_remove("IRONWRIT_CONFIG")
         .output()
-        .expect("failed to run ironwrit binary");
-    assert!(!out.status.success());
+        .expect("failed to run ironwrit binary")
+}
+
+fn assert_ok(out: &Output) -> String {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stderr.contains("token enforcement is not implemented yet"),
-        "stderr was:\n{stderr}"
+        out.status.success(),
+        "stderr was:
+{stderr}"
+    );
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+fn assert_fails_with(out: &Output, needle: &str) {
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success(), "expected failure");
+    assert!(
+        stderr.contains(needle),
+        "stderr was:
+{stderr}"
+    );
+}
+
+#[test]
+fn keygen_mint_attenuate_inspect() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    std::fs::write(
+        d.join("policy.dl"),
+        "right(\"read_file\");
+",
+    )
+    .unwrap();
+
+    assert_ok(&ironwrit_in(d, &["keygen"]));
+    assert!(d.join("root.key").exists() && d.join("root.pub").exists());
+    assert_fails_with(&ironwrit_in(d, &["keygen"]), "already exists");
+
+    assert_ok(&ironwrit_in(
+        d,
+        &[
+            "mint",
+            "--policy",
+            "policy.dl",
+            "--ttl",
+            "1h",
+            "-o",
+            "token",
+        ],
+    ));
+    let narrowed = assert_ok(&ironwrit_in(
+        d,
+        &["attenuate", "token", "--check", "check if op(\"read\")"],
+    ));
+    std::fs::write(d.join("narrowed"), narrowed).unwrap();
+
+    let report = assert_ok(&ironwrit_in(
+        d,
+        &["inspect", "narrowed", "--pub", "root.pub"],
+    ));
+    assert!(report.contains("signature: valid"), "{report}");
+    assert!(report.contains("(in 59m"), "{report}");
+    assert!(report.contains("right(\"read_file\")"), "{report}");
+    assert!(
+        report.contains(
+            "block 1:
+  check if op(\"read\")"
+        ),
+        "{report}"
+    );
+}
+
+#[test]
+fn inspect_rejects_tokens_from_another_root() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    std::fs::write(
+        d.join("policy.dl"),
+        "right(\"read_file\");
+",
+    )
+    .unwrap();
+    assert_ok(&ironwrit_in(d, &["keygen", "--out", "a"]));
+    assert_ok(&ironwrit_in(d, &["keygen", "--out", "b"]));
+    assert_ok(&ironwrit_in(
+        d,
+        &[
+            "mint",
+            "--key",
+            "a.key",
+            "--policy",
+            "policy.dl",
+            "-o",
+            "token",
+        ],
+    ));
+    assert_fails_with(
+        &ironwrit_in(d, &["inspect", "token", "--pub", "b.pub"]),
+        "malformed token",
+    );
+}
+
+#[test]
+fn run_refuses_forged_tokens() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    assert_ok(&ironwrit_in(d, &["keygen"]));
+    assert_fails_with(
+        &ironwrit_in(d, &["run", "--token", "not-a-token", "--", "anything"]),
+        "malformed token",
+    );
+}
+
+#[test]
+fn run_with_token_requires_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    std::fs::write(
+        d.join("policy.dl"),
+        "right(\"read_file\");
+",
+    )
+    .unwrap();
+    assert_ok(&ironwrit_in(d, &["keygen"]));
+    let token = assert_ok(&ironwrit_in(d, &["mint", "--policy", "policy.dl"]));
+    assert_fails_with(
+        &ironwrit_in(d, &["run", "--token", token.trim(), "--", "anything"]),
+        "extractor config is needed",
     );
 }
 

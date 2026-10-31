@@ -1,0 +1,87 @@
+# Which tool arguments ironwrit turns into Datalog facts.
+#
+# Every call gets `tool("<name>")`. Tools listed here also get:
+#   extract = "fs"     ->  op("read" | "write"), path("<canonical path>") per path
+#   extract = "url"    ->  url_scheme, url_host, url_port, url_path per URL
+#   extract = "email"  ->  recipient("<address>"), recipient_domain("<domain>")
+#
+# `args` names the arguments holding those values (a string or an array of
+# strings). If an argument holds a path but isn't listed here, the policy can't
+# see it, so list every one.
+
+# --- @modelcontextprotocol/server-filesystem ---
+
+[tools.read_file]
+extract = "fs"
+op = "read"
+args = ["path"]
+
+[tools.read_text_file]
+extract = "fs"
+op = "read"
+args = ["path"]
+
+[tools.read_media_file]
+extract = "fs"
+op = "read"
+args = ["path"]
+
+[tools.read_multiple_files]
+extract = "fs"
+op = "read"
+args = ["paths"]
+
+[tools.list_directory]
+extract = "fs"
+op = "read"
+args = ["path"]
+
+[tools.list_directory_with_sizes]
+extract = "fs"
+op = "read"
+args = ["path"]
+
+[tools.directory_tree]
+extract = "fs"
+op = "read"
+args = ["path"]
+
+[tools.search_files]
+extract = "fs"
+op = "read"
+args = ["path"]
+
+[tools.get_file_info]
+extract = "fs"
+op = "read"
+args = ["path"]
+
+[tools.write_file]
+extract = "fs"
+op = "write"
+args = ["path"]
+
+[tools.edit_file]
+extract = "fs"
+op = "write"
+args = ["path"]
+
+[tools.create_directory]
+extract = "fs"
+op = "write"
+args = ["path"]
+
+[tools.move_file]
+extract = "fs"
+op = "write"
+args = ["source", "destination"]
+
+# --- demo servers (Phase 5) ---
+
+[tools.fetch]
+extract = "url"
+args = ["url"]
+
+[tools.send_email]
+extract = "email"
+args = ["to", "cc", "bcc"]

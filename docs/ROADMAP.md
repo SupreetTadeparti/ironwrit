@@ -48,19 +48,19 @@ ironwrit/
 - **Done when:** Claude Code behaves the same with or without ironwrit in the path
 
 ## Phase 3: Capability tokens (Weeks 4–6)
-- [ ] 3.1 `ironwrit keygen` writes an Ed25519 root keypair (`root.key`, `root.pub`)
-- [ ] 3.2 `ironwrit mint --policy <file.dl>` creates a Biscuit token from a Datalog policy file
-- [ ] 3.3 `ironwrit attenuate <token> --check '<datalog>'` appends a narrowing block
-- [ ] 3.4 `ironwrit inspect <token>` pretty-prints blocks, checks and expiry
-- [ ] 3.5 `ToolCall` → facts: `tool($name)`, plus extractors from `ironwrit.toml`:
+- [x] 3.1 `ironwrit keygen` writes an Ed25519 root keypair (`root.key`, `root.pub`)
+- [x] 3.2 `ironwrit mint --policy <file.dl>` creates a Biscuit token from a Datalog policy file
+- [x] 3.3 `ironwrit attenuate <token> --check '<datalog>'` appends a narrowing block
+- [x] 3.4 `ironwrit inspect <token>` pretty-prints blocks, checks and expiry
+- [x] 3.5 `ToolCall` → facts: `tool($name)`, plus extractors from `ironwrit.toml`:
   - fs: `path($canonical)`, `op("read"|"write")`
-  - fetch: `scheme`, `host`, `port`, `path`
-  - email: `recipient` (one fact per recipient)
-- [ ] 3.6 Canonicalization module: resolve `..` and symlinks, normalize separators and case (Windows!), percent-decode, IDN → punycode
-- [ ] 3.7 `BiscuitPolicy: CallPolicy`: authorizer with a `time()` fact and `allow if` rules; deny by default
-- [ ] 3.8 Gateway loads the token from `--token`/`IRONWRIT_TOKEN` and filters `tools/list` down to tools the token could permit
-- [ ] 3.9 A denial comes back as an MCP tool error with a clear reason (`"denied: path outside /docs"`)
-- [ ] 3.10 Tests: allow/deny table tests, traversal attacks, expiry, and a property test that an attenuated token ⊆ its parent
+  - fetch: `url_scheme`, `url_host`, `url_port`, `url_path`
+  - email: `recipient`, `recipient_domain` (one per recipient)
+- [x] 3.6 Canonicalization module: resolve `..` and symlinks, normalize separators and case (Windows!), percent-decode, IDN → punycode
+- [x] 3.7 `BiscuitPolicy: CallPolicy`: authorizer with a `time()` fact and `allow if` rules; deny by default
+- [x] 3.8 Gateway loads the token from `--token`/`IRONWRIT_TOKEN` and filters `tools/list` down to tools the token could permit
+- [x] 3.9 A denial comes back as an MCP tool error with a clear reason (`"denied: path outside /docs"`)
+- [x] 3.10 Tests: allow/deny table tests, traversal attacks, expiry, and a property test that an attenuated token ⊆ its parent
 - **Done when:** a token scoped to `read_file` + `/docs/**` can't read `/docs/../secret.txt`, write files, or call `send_email`
 
 ## Phase 4: Tamper-evident ledger (Weeks 7–8)
