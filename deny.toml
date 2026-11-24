@@ -2,6 +2,12 @@
 
 [advisories]
 version = 2
+# Both come in through biscuit-auth 6, the latest stable release. Remove these
+# once biscuit-auth 7 is stable. Keep in sync with .cargo/audit.toml.
+ignore = [
+    { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5 timing leak is in biscuit's P-256 path; ironwrit only generates Ed25519 keys." },
+    { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 is unmaintained but compile-time only, via biscuit-quote; no upstream replacement yet." },
+]
 
 [licenses]
 version = 2

@@ -1,0 +1,6 @@
+# Keep in sync with the ignore list in deny.toml. Remove once biscuit-auth 7 is stable.
+[advisories]
+ignore = [
+    "RUSTSEC-2026-0387", # crypto-bigint 0.5: P-256 path only; ironwrit uses Ed25519
+    "RUSTSEC-2026-0173", # proc-macro-error2 unmaintained: compile-time only
+]
